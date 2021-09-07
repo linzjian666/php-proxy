@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"github.com/lucas-clemente/quic-go/http3"
 	"io"
 	"log"
 	"net"
@@ -97,7 +98,7 @@ func (cli *client) init_client() {
 	}
 	//
 	cli.client = &http.Client{
-		Transport: cli.tr,
+		Transport: &http3.RoundTripper{TLSClientConfig: cli.tlsconfig},
 	}
 }
 func (cli *client) VerifyConnection(cs tls.ConnectionState) error {
