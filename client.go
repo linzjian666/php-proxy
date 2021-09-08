@@ -4,20 +4,21 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"github.com/lucas-clemente/quic-go"
 	"github.com/lucas-clemente/quic-go/http3"
 	"io"
 	"log"
-	"net"
+	//"net"
 	"net/http"
 	"reflect"
-	"time"
+	//"time"
 )
 
 type client struct {
 	//global config
 	cfg *config
 	//http.Transport when connect server
-	tr *http.Transport
+	tr http.RoundTripper
 	//tls.Config when connect https server
 	tlsconfig *tls.Config
 	//http.Client used to connect server
@@ -67,7 +68,11 @@ func (cli *client) Do(req *http.Request) (resp *http.Response, err error) {
 			}
 		}
 	}
-	return cli.client.Do(req)
+	resp, err = cli.client.Do(req)
+	if err != nil {
+		cli.tr.(*http3.RoundTripper).Close()
+	}
+	return resp, err
 }
 
 func (cli *client) init_client() {
@@ -83,22 +88,27 @@ func (cli *client) init_client() {
 		cli.tlsconfig.ServerName = cli.cfg.Sni
 	}
 	//tr http.client default tr + tlsconfig
-	cli.tr = &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig:       cli.tlsconfig,
-	}
+	/*
+		cli.tr = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			TLSClientConfig:       cli.tlsconfig,
+		}*/
+	var qconf quic.Config
+	qconf.KeepAlive = true
+	//qconf.MaxIdleTimeout = cli.tr.IdleConnTimeout
+	cli.tr = &http3.RoundTripper{TLSClientConfig: cli.tlsconfig, QuicConfig: &qconf}
 	//
 	cli.client = &http.Client{
-		Transport: &http3.RoundTripper{TLSClientConfig: cli.tlsconfig},
+		Transport: cli.tr,
 	}
 }
 func (cli *client) VerifyConnection(cs tls.ConnectionState) error {
