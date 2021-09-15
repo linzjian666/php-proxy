@@ -209,7 +209,7 @@ func (prx *proxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	//
-	defer Res.Body.Close()
+	//defer Res.Body.Close()
 	//
 	proxy_res_data := &response{res: Res, cfg: prx.cfg}
 	resp := proxy_res_data.parse_response()
@@ -231,7 +231,8 @@ func (prx *proxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	_, err = prx.IOCopy(rw, resp.Body)
 	//
 	if err != nil {
-		if strings.Contains(err.Error(), io.ErrUnexpectedEOF.Error()) == true {
+		if strings.Contains(err.Error(), io.ErrUnexpectedEOF.Error()) == true || true {
+			log.Println(err)
 			hijacker, ok := rw.(http.Hijacker)
 			if !ok {
 				log.Println("Not Support Hijacking")

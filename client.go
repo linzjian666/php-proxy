@@ -71,6 +71,7 @@ func (cli *client) Do(req *http.Request) (resp *http.Response, err error) {
 	resp, err = cli.client.Do(req)
 	if err != nil {
 		cli.tr.(*http3.RoundTripper).Close()
+		resp, err = cli.client.Do(req)
 	}
 	return resp, err
 }
