@@ -1,7 +1,7 @@
 package main
 
 import (
-	//"bufio"
+	"bufio"
 	//"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -115,11 +115,95 @@ func (prx *proxy) IOCopy(dst io.Writer, src io.Reader) (written int64, err error
 	prx.bufpool.Put(buf)
 	return written, err
 }
+func (prx *proxy) ServePROXY(rw http.ResponseWriter, req *http.Request) {
+	hijacker, ok := rw.(http.Hijacker)
+	if !ok {
+		log.Println("Not Support Hijacking")
+	}
+	client, _, err := hijacker.Hijack()
+	if err != nil {
+		log.Println(err)
+	}
+	defer client.Close()
+	//
+	var address string
+	if strings.Index(req.Host, ":") == -1 { //host port not include,default 80
+		address = req.Host + ":http"
+	} else {
+		address = req.Host
+	}
 
+	server, err := net.Dial("tcp", address)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer server.Close()
+	//
+	if req.Method == http.MethodConnect {
+		io.WriteString(client, "HTTP/1.1 200 Connection established\r\n\r\n")
+		//exchange data
+		go prx.IOCopy(server, client)
+		prx.IOCopy(client, server)
+		return
+	}
+	//
+	req.Header.Del("Proxy-Authorization")
+	req.Header.Del("Proxy-Connection")
+	//
+	Req := req
+	//http proxy keep alive
+	for true {
+		err = Req.Write(server)
+		if err != nil {
+			return
+		}
+		Res, err := http.ReadResponse(bufio.NewReader(server), Req)
+		if err != nil {
+			return
+		}
+		err = Res.Write(client)
+		if err != nil {
+			return
+		}
+		Req, err = http.ReadRequest(bufio.NewReader(client))
+		if err != nil {
+			return
+		}
+		//
+		req.Header.Del("Proxy-Authorization")
+		req.Header.Del("Proxy-Connection")
+		//
+	}
+
+}
+func (prx *proxy) isblocked(host string) bool {
+	hostname := stripPort(host)
+	hostnamelth := len(hostname)
+	for key, _ := range gfwlist {
+		if hostnamelth >= len(key) {
+			subhost := hostname[(hostnamelth - len(key)):]
+			if key == subhost {
+				return true
+			}
+		}
+	}
+	return false
+
+}
 func (prx *proxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	var tlscon *tls.Conn
 	//
-	if req.Method != "CONNECT" && !req.URL.IsAbs() {
+	if prx.cfg.Autoproxy && (req.Method == http.MethodConnect || req.Method != http.MethodConnect && req.URL.IsAbs()) {
+		blocked := prx.isblocked(req.Host)
+		if blocked == false {
+			log.Printf("Direct Connect %s", req.Host)
+			prx.ServePROXY(rw, req)
+			return
+		}
+	}
+	//
+	if req.Method != http.MethodConnect && !req.URL.IsAbs() {
 		//
 		req.URL.Scheme = "https"
 		if req.Host == "" {
@@ -205,6 +289,11 @@ func (prx *proxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	if err != nil {
 		log.Println(err)
+		origin := req_op.http_req.Header.Get("Origin")
+		if origin != "" {
+			rw.Header().Add("Access-Control-Allow-Origin", origin)
+			rw.Header().Add("Access-Control-Allow-Credentials", "true")
+		}
 		http.Error(rw, "empty response", http.StatusBadGateway)
 		return
 	}
@@ -224,8 +313,20 @@ func (prx *proxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	for key, values := range resp.Header {
 		for _, value := range values {
 			rw.Header().Add(key, value)
+			if prx.cfg.Debug {
+				log.Print(key + ":" + value)
+			}
 		}
 	}
+	//Patch CORS
+	origin := req_op.http_req.Header.Get("Origin")
+	if origin != "" && rw.Header().Get("Access-Control-Allow-Origin") == "" {
+		rw.Header().Add("Access-Control-Allow-Origin", origin)
+	}
+	if origin != "" && rw.Header().Get("Access-Control-Allow-Credentials") == "" {
+		rw.Header().Add("Access-Control-Allow-Credentials", "true")
+	}
+	//rw.Header().Set("Set-Cookie", rw.Header().Get("Set-Cookie") + ";HttpOnly;Secure;SameSite=Strict" )
 	//
 	rw.WriteHeader(resp.StatusCode)
 	_, err = prx.IOCopy(rw, resp.Body)

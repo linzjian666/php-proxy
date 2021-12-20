@@ -10,6 +10,7 @@ import (
 	"log"
 	//"net"
 	"net/http"
+	"net/url"
 	"reflect"
 	//"time"
 )
@@ -25,6 +26,8 @@ type client struct {
 	client *http.Client
 	//ca root cert info for middle attack check
 	cert *x509.Certificate
+	//server
+	server *url.URL
 }
 
 func (cli *client) Post(url, contentType string, body io.Reader) (resp *http.Response, err error) {
@@ -52,8 +55,13 @@ func (cli *client) Post(url, contentType string, body io.Reader) (resp *http.Res
 func (cli *client) Do(req *http.Request) (resp *http.Response, err error) {
 	if req == nil {
 		log.Printf("POST Request == nil")
+	} else {
+		req.URL = cli.server
 	}
 	req.Header.Set("Content-Type", "application/octet-stream")
+	if cli.cfg.User_agent != "" {
+		req.Header.Set("User-Agent", cli.cfg.User_agent)
+	}
 	if cli.cfg.Sni != "" {
 		if req.URL.Port() == "" {
 			req.Host = cli.cfg.Sni
@@ -77,6 +85,13 @@ func (cli *client) Do(req *http.Request) (resp *http.Response, err error) {
 }
 
 func (cli *client) init_client() {
+	//
+	server, err := url.Parse(cli.cfg.Fetchserver)
+	if err != nil {
+		log.Fatal(err)
+	}
+	cli.server = server
+	//
 	//tls config
 	cli.tlsconfig = &tls.Config{
 		InsecureSkipVerify: cli.cfg.Insecure,

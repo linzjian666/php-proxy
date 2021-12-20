@@ -3,7 +3,7 @@
 本项目主要实现的是GoAgent的php代理模式，协议兼容GoAgent php模式；
 本项目主要用于个人学习，研究免费php空间的用途，严禁用于非法用途，后果自负
 
-### 特性改进
+### 特性以及改进
 - 在连接php server时，https模式支持TLS sni的发送，可以用来穿过CDN，尤其是cloudflare
 - 支持自定义TLS SNI的发送,可以用来欺骗xxx
 - 代理模式添加支持HTTP OPTIONS请求，chrome浏览器会用OPTIONS方法
@@ -14,6 +14,8 @@
 - 由于php-proxy.crt/key根证书公钥私钥公开了，这里在检测到以公开根证书作为根的中间人(php server)，就会断开与服务器的通信
 - 为了安全性以及使用的灵活性，添加支持自定义CA
 - 支持`HTTP3`(dev分支，用于尝鲜测试),测试可以跟cloudflare CDN通信
+- 支持智能代理模式
+- 支持自定义User-Agent(UA)
 
 ### 协议分析
 - 简单的来讲就是把客户端请求的数据（头+Body）,打包POST到php server，格式如下：
@@ -80,15 +82,43 @@ php-proxy.key文件，则使用内部预留的CA(也就是我自己生成的CA),
 另外提一下，如果IP没被封锁，但TLS SNI被盯上了，这个好办，换个域名就好了（好多地方可以免费申请域名）
 
 11. v2.0.0版本，重写了数据处理过程，修复了下载问题，性能大幅提升，感谢[10362227](https://github.com/10362227)所做的对比与测试
+12. v2.1.0版本,支持智能代理功能(采用内置的域名列表匹配模式),该功能默认未启用
+```
+{
+"fetchserver": "https://a.bc.com/go/index.php",
+"password": "123456",
+"sni": "a.bc.com",
+"listen": "127.0.0.1:8081",
+"debug": false,
+"insecure": false,
+"autoproxy": true
+}
+```
+13. v2.1.2版本,支持自定义user-agent,当user-agent配置为空时，使用请求端的UA，否则使用自定义的UA
+```
+{
+"fetchserver": "https://a.bc.com/go/index.php",
+"password": "123456",
+"sni": "a.bc.com",
+"listen": "127.0.0.1:8081",
+"debug": false,
+"insecure": false,
+"autoproxy": true,
+"user-agent": ""
+}
+```
 ### 注意事项
 - 由于我自己生成的php-proxy.key/crt私钥和公钥的公开，如果导入到系统中，可能会导致一些钓鱼网站的恶意使用;在访问一些以Php-Proxy CA签发的https网站，本机浏览器
-会直接信任这种网站,可能会造成隐私泄露;如果你用的chrome浏览器，建议php-proxy.crt证书不导到系统中，在chrome快捷方式目标后面加上--ignore-certificate-errors
+会直接信任这种网站,可能会造成隐私泄露;如果你用的chrome浏览器，建议php-proxy.crt证书不要导到入到系统中，在chrome快捷方式目标后面加上--ignore-certificate-errors
 这样chrome也是可以用的,只是地址栏中会显示红色,这不影响使用;如果确实你需要导入CA到系统中，则在不使用时，建议从根证书系统中删除;
 所以为了安全起见，建议自己动手生成CA;当然你觉得也没啥隐私可泄露的，这也无所谓了
 
+### php免费空间推荐
+- [000webhost](https://www.000webhost.com/) 
+- [heroku](https://www.heroku.com/) 
+
 ### TODO
 - 增加请求头添加的配置，也许可以用来放到国内外(免费)的php空间，做免流代理
-- 增加智能代理功能
 
 ### 感谢
 - GoAgent项目，让我学习了Python，php

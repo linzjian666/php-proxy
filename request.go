@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	//"strconv"
 )
 
@@ -82,7 +81,20 @@ func (req *request) parse_request() {
 	//
 	req.http_req.Header.Add("X-URLFETCH-password", req.cfg.Password)
 	//
+	//for feature use(index.php need upgrade)
+	if req.cfg.Insecure {
+		req.http_req.Header.Add("X-URLFETCH-insecure", "1")
+	}
+	//
 	req.http_req.Header.WriteSubset(header_buf, ReqDeleteHeader)
+	//
+	if req.cfg.Debug {
+		for k, v := range req.http_req.Header {
+			for _, value := range v {
+				log.Print(k + ":" + value)
+			}
+		}
+	}
 	//
 	com.deflate_compress(deflare_header_buf, header_buf)
 	//
@@ -95,13 +107,12 @@ func (req *request) parse_request() {
 		log.Fatal("request header too big")
 	}
 	//
-	server, _ := url.Parse(req.cfg.Fetchserver)
-	//
 	req.cli_req = &http.Request{
 		Method: http.MethodPost,
-		URL:    server,
 		Header: http.Header{},
 	}
+	//default use brower UA
+	req.cli_req.Header.Set("User-Agent", req.http_req.Header.Get("User-Agent"))
 	//
 	if req.http_req.ContentLength > 0 {
 		req.cli_req.ContentLength = int64(len(length)+deflare_header_buf.Len()) + req.http_req.ContentLength
