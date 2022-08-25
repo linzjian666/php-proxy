@@ -91,7 +91,7 @@ addEventListener('fetch', event => event.respondWith(handleRequest(event.request
  * @return {String}
  */
 function parseFetch(request, ws) {
-    const password = ''  // 直接在此处设置使用密码，类型为字符串
+    const password = 'password123'  // 直接在此处设置使用密码，类型为字符串
     const headers = request.headers
     let fetchOptions, status = 0, err
 
